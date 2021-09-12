@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const Hapi = require('@hapi/hapi');
+const Inert = require('@hapi/inert');
 const Jwt = require('@hapi/jwt');
 const ClientError = require('./exceptions/ClientError');
 
@@ -9,41 +10,67 @@ const authentications = require('./api/authentications');
 const AuthenticationsService = require('./services/postgres/AuthenticationsService');
 const TokenManager = require('./tokenize/TokenManager');
 const AuthenticationsValidator = require('./validator/authentications');
+
 // collaborations
 const collaborations = require('./api/collaborations');
 const CollaborationsService = require('./services/postgres/CollaborationsService');
 const CollaborationValidator = require('./validator/collaboration');
+
 // playlists
 const playlists = require('./api/playlists');
 const PlaylistsService = require('./services/postgres/PlaylistsService');
 const PlaylistsValidator = require('./validator/playlists');
+
 // songs
 const songs = require('./api/songs');
 const SongsService = require('./services/postgres/SongsService');
 const SongsValidator = require('./validator/songs');
+
 // users
 const users = require('./api/users');
 const UsersService = require('./services/postgres/UsersService');
 const UsersValidator = require('./validator/users');
 
-const init = async () => {
-  const server = Hapi.server({
-    port: process.env.PORT,
-    host: process.env.HOST,
-    routes: {
-      cors: {
-        origin: ['*'],
-      },
-    },
-  });
-  const authenticationsService = new AuthenticationsService();
-  const collaborationsService = new CollaborationsService();
-  const songsService = new SongsService();
-  const usersService = new UsersService();
-  const playlistsService = new PlaylistsService(collaborationsService, songsService);
+// exports
+const _exports = require('./api/exports');
+const ProducerService = require('./services/rabbitmq/ProducerService');
+const ExportsValidator = require('./validator/exports');
 
+// uploads
+const uploads = require('./api/uploads');
+const StorageService = require('./services/localstorage/LocalStorageService');
+/// const StorageService = require('./services/S3/S3Service');
+const UploadsValidator = require('./validator/uploads');
+
+// cache
+const CacheService = require('./services/redis/CacheService');
+
+const init = async () => {
   try {
+    const cacheService = new CacheService();
+    const authenticationsService = new AuthenticationsService();
+    const collaborationsService = new CollaborationsService(cacheService);
+    const songsService = new SongsService();
+    const usersService = new UsersService();
+    const playlistsService = new PlaylistsService(
+      collaborationsService, songsService, cacheService,
+    );
+    const storageService = new StorageService();
+
+    const server = Hapi.server({
+      port: process.env.PORT,
+      host: process.env.HOST,
+      routes: {
+        cors: {
+          origin: ['*'],
+        },
+      },
+    });
+
     await server.register([
+      {
+        plugin: Inert,
+      },
       {
         plugin: Jwt,
       },
@@ -104,6 +131,21 @@ const init = async () => {
           validator: UsersValidator,
         },
       },
+      {
+        plugin: _exports,
+        options: {
+          exportsService: ProducerService,
+          playlistsService,
+          validator: ExportsValidator,
+        },
+      },
+      {
+        plugin: uploads,
+        options: {
+          service: storageService,
+          validator: UploadsValidator,
+        },
+      },
     ]);
 
     server.ext('onPreResponse', (request, h) => {
@@ -135,7 +177,7 @@ const init = async () => {
     await server.start();
     console.log(`Server berjalan pada ${server.info.uri}`);
   } catch (error) {
-    console.log(error);
+    console.error(error);
   }
 };
 

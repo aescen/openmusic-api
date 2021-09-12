@@ -25,13 +25,11 @@ class SongsService {
 
     const result = await this._pool.query(query);
 
-    const resultOk = result.rows[0].id;
-
-    if (!resultOk) {
+    if (!result.rowCount) {
       throw new InvariantError('Failed to add song.');
     }
 
-    return resultOk;
+    return result.rows[0].id;
   }
 
   async getSongs() {
@@ -45,11 +43,11 @@ class SongsService {
       values: [id],
     };
 
-    const song = await this._pool.query(query);
-    if (!song.rowCount) {
+    const result = await this._pool.query(query);
+    if (!result.rowCount) {
       throw new NotFoundError('Song not found.');
     }
-    return song.rows.map(mapDb.toSong)[0];
+    return result.rows.map(mapDb.toSong)[0];
   }
 
   async editSong(id, payload) {

@@ -6,16 +6,6 @@ const mapDb = {
   }) => ({
     id, title, year, performer, genre, duration, insertedAt: inserted_at, updatedAt: updated_at,
   }),
-
-  toSongs: ({
-    id, title, performer,
-  }) => ({
-    id, title, performer,
-  }),
-
-  toPlaylists: ({ id, name, username }) => ({ id, name, username }),
-
-  toPlaylistSongs: ({ id, title, performer }) => ({ id, title, performer }),
 };
 
 module.exports = { mapDb };
